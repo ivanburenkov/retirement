@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pre-College Wealth & FAFSA Strategy Planner</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-403b: #38bdf8;
+      --accent-roth: #4ade80;
+      --accent-taxable: #f87171;
+      --accent-primary: #6366f1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 16px;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .summary-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .summary-card span.label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .summary-card span.value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .summary-card.c-403b .value { color: var(--accent-403b); }
+    .summary-card.c-roth .value { color: var(--accent-roth); }
+    .summary-card.c-taxable .value { color: var(--accent-taxable); }
+
+    .chart-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      height: 420px;
+      position: relative;
+    }
+
+    .controls-panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .controls-panel h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+    }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px 28px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+
+    .control-header span.title {
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    .control-header span.val {
+      color: var(--accent-primary);
+      font-weight: 600;
+      font-feature-settings: "tnum";
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-primary);
+      cursor: pointer;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      padding: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Pre-College Wealth & FAFSA Transition Planner</h1>
+      <p>Simulating immediate taxable asset drawdown to fund Roth IRAs and an aggressive 403(b) max-out before college.</p>
+    </header>
+
+    <div class="summary-grid">
+      <div class="summary-card c-403b">
+        <span class="label">403(b) Nest Egg (Final Year)</span>
+        <span class="value" id="sum-403b">$0</span>
+      </div>
+      <div class="summary-card c-roth">
+        <span class="label">Roth IRAs (FAFSA-Exempt)</span>
+        <span class="value" id="sum-roth">$0</span>
+      </div>
+      <div class="summary-card c-taxable">
+        <span class="label">Remaining Taxable Balance</span>
+        <span class="value" id="sum-taxable">$0</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <canvas id="wealthChart"></canvas>
+    </div>
+
+    <div class="controls-panel">
+      <h2>Strategy & Contribution Knobs</h2>
+      <div class="slider-grid">
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Expected Annual Return</span>
+            <span class="val" id="disp-rate">7.0%</span>
+          </div>
+          <input type="range" id="rate" min="3" max="12" step="0.5" value="7" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Years Until College</span>
+            <span class="val" id="disp-years">10 years</span>
+          </div>
+          <input type="range" id="years" min="6" max="12" step="1" value="10" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Taxable Stock Sell-Off ($/mo)</span>
+            <span class="val" id="disp-taxable_draw">$1,250/mo</span>
+          </div>
+          <input type="range" id="taxable_draw" min="0" max="2000" step="50" value="1250" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Roth IRA Contribution ($/mo)</span>
+            <span class="val" id="disp-roth_contrib">$1,250/mo</span>
+          </div>
+          <input type="range" id="roth_contrib" min="0" max="1250" step="50" value="1250" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">403(b) Deferral: Early Years ($/mo)</span>
+            <span class="val" id="disp-m_403b_early">$1,200/mo</span>
+          </div>
+          <input type="range" id="m_403b_early" min="200" max="2500" step="50" value="1200" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">403(b) Deferral: Final 3 Yrs ($/mo)</span>
+            <span class="val" id="disp-m_403b_late">$2,042/mo</span>
+          </div>
+          <input type="range" id="m_403b_late" min="500" max="2500" step="50" value="2042" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Starting Taxable Brokerage</span>
+            <span class="val" id="disp-initial_taxable">$45,000</span>
+          </div>
+          <input type="range" id="initial_taxable" min="0" max="150000" step="5000" value="45000" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Starting Roth IRA Balance</span>
+            <span class="val" id="disp-initial_roth">$30,000</span>
+          </div>
+          <input type="range" id="initial_roth" min="0" max="200000" step="5000" value="30000" />
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span class="title">Starting 403(b) Balance</span>
+            <span class="val" id="disp-initial_403b">$40,000</span>
+          </div>
+          <input type="range" id="initial_403b" min="0" max="300000" step="5000" value="40000" />
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      *Includes a constant $250/mo employer 403(b) contribution. Monthly compounding with end-of-period cash flows.
+    </footer>
+  </div>
+
+  <script>
+    const fmtCurr = (v) => "$" + Math.round(v).toLocaleString("en-US");
+
+    const sliders = [
+      "rate", "years", "taxable_draw", "roth_contrib",
+      "m_403b_early", "m_403b_late", "initial_taxable",
+      "initial_roth", "initial_403b"
+    ];
+
+    const ctx = document.getElementById("wealthChart").getContext("2d");
+    let chart;
+
+    function initChart() {
+      chart = new Chart(ctx, {
+        type: "line",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (c) => ` ${c.dataset.label}: ${fmtCurr(c.raw)}`
+              }
+            },
+            legend: {
+              labels: { color: "#94a3b8", font: { size: 12 } }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: "#334155" },
+              ticks: { color: "#94a3b8" }
+            },
+            y: {
+              grid: { color: "#334155" },
+              ticks: {
+                color: "#94a3b8",
+                callback: (v) => fmtCurr(v)
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function calculate() {
+      const rate = parseFloat(document.getElementById("rate").value) / 100;
+      const years = parseInt(document.getElementById("years").value, 10);
+      const taxable_draw = parseFloat(document.getElementById("taxable_draw").value);
+      const roth_contrib = parseFloat(document.getElementById("roth_contrib").value);
+      const m_403b_early = parseFloat(document.getElementById("m_403b_early").value);
+      const m_403b_late = parseFloat(document.getElementById("m_403b_late").value);
+      const initial_taxable = parseFloat(document.getElementById("initial_taxable").value);
+      const initial_roth = parseFloat(document.getElementById("initial_roth").value);
+      const initial_403b = parseFloat(document.getElementById("initial_403b").value);
+      const employer_match = 250;
+
+      // Update labels
+      document.getElementById("disp-rate").textContent = (rate * 100).toFixed(1) + "%";
+      document.getElementById("disp-years").textContent = years + " years";
+      document.getElementById("disp-taxable_draw").textContent = fmtCurr(taxable_draw) + "/mo";
+      document.getElementById("disp-roth_contrib").textContent = fmtCurr(roth_contrib) + "/mo";
+      document.getElementById("disp-m_403b_early").textContent = fmtCurr(m_403b_early) + "/mo";
+      document.getElementById("disp-m_403b_late").textContent = fmtCurr(m_403b_late) + "/mo";
+      document.getElementById("disp-initial_taxable").textContent = fmtCurr(initial_taxable);
+      document.getElementById("disp-initial_roth").textContent = fmtCurr(initial_roth);
+      document.getElementById("disp-initial_403b").textContent = fmtCurr(initial_403b);
+
+      const labels = [];
+      const data403b = [];
+      const dataRoth = [];
+      const dataTaxable = [];
+
+      const rMonthly = rate / 12;
+      const transitionYear = years - 3;
+
+      for (let t = 0; t <= years; t++) {
+        labels.push(`Year ${t}`);
+        const months = t * 12;
+
+        // 403(b)
+        let v403b = 0;
+        if (t <= transitionYear) {
+          const pmt = m_403b_early + employer_match;
+          v403b = rate > 0
+            ? initial_403b * Math.pow(1 + rMonthly, months) + pmt * ((Math.pow(1 + rMonthly, months) - 1) / rMonthly)
+            : initial_403b + pmt * months;
+        } else {
+          const pmtEarly = m_403b_early + employer_match;
+          const monthsEarly = transitionYear * 12;
+          const baseAtTransition = rate > 0
+            ? initial_403b * Math.pow(1 + rMonthly, monthsEarly) + pmtEarly * ((Math.pow(1 + rMonthly, monthsEarly) - 1) / rMonthly)
+            : initial_403b + pmtEarly * monthsEarly;
+
+          const pmtLate = m_403b_late + employer_match;
+          const monthsLate = (t - transitionYear) * 12;
+          v403b = rate > 0
+            ? baseAtTransition * Math.pow(1 + rMonthly, monthsLate) + pmtLate * ((Math.pow(1 + rMonthly, monthsLate) - 1) / rMonthly)
+            : baseAtTransition + pmtLate * monthsLate;
+        }
+        data403b.push(Math.round(v403b));
+
+        // Roth IRA
+        let vRoth = rate > 0
+          ? initial_roth * Math.pow(1 + rMonthly, months) + roth_contrib * ((Math.pow(1 + rMonthly, months) - 1) / rMonthly)
+          : initial_roth + roth_contrib * months;
+        dataRoth.push(Math.round(vRoth));
+
+        // Taxable Brokerage
+        let vTax = rate > 0
+          ? Math.max(0, initial_taxable * Math.pow(1 + rMonthly, months) - taxable_draw * ((Math.pow(1 + rMonthly, months) - 1) / rMonthly))
+          : Math.max(0, initial_taxable - taxable_draw * months);
+        dataTaxable.push(Math.round(vTax));
+      }
+
+      // Update Summary Cards (at college start year)
+      document.getElementById("sum-403b").textContent = fmtCurr(data403b[years]);
+      document.getElementById("sum-roth").textContent = fmtCurr(dataRoth[years]);
+      document.getElementById("sum-taxable").textContent = fmtCurr(dataTaxable[years]);
+
+      // Update Chart
+      chart.data.labels = labels;
+      chart.data.datasets = [
+        {
+          label: "403(b) (Tax-Sheltered)",
+          data: data403b,
+          borderColor: "#38bdf8",
+          backgroundColor: "rgba(56, 189, 248, 0.15)",
+          fill: true,
+          tension: 0.2
+        },
+        {
+          label: "Roth IRAs (FAFSA-Exempt)",
+          data: dataRoth,
+          borderColor: "#4ade80",
+          backgroundColor: "transparent",
+          borderWidth: 2.5,
+          tension: 0.2
+        },
+        {
+          label: "Taxable Brokerage (Drawn Down)",
+          data: dataTaxable,
+          borderColor: "#f87171",
+          backgroundColor: "transparent",
+          borderDash: [5, 5],
+          borderWidth: 2,
+          tension: 0.2
+        }
+      ];
+      chart.update();
+    }
+
+    initChart();
+    calculate();
+
+    sliders.forEach((id) => {
+      document.getElementById(id).addEventListener("input", calculate);
+    });
+  </script>
+</body>
+</html>
